@@ -1,43 +1,42 @@
 import os
 import logging
+import shutil
+import sys
 from typing import List
 import utils
 from config import Config
+import argparse
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(Config.log_file),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-def get_videos(input_folder: str) -> List[str]:
+def setup_logging(config: Config):
     """
-    Get list of video files from input folder.
+    Set up logging configuration.
     
     Args:
-        input_folder: Path to input folder
-        
-    Returns:
-        List of video file paths
-        
-    Raises:
-        FileNotFoundError: If input folder doesn't exist
+        config: Configuration object containing logging settings
     """
-    if not os.path.exists(input_folder):
-        raise FileNotFoundError(f"Input folder not found: {input_folder}")
-        
-    videos = [f for f in os.listdir(input_folder) 
-              if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))]
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(config.log_file),
+            logging.StreamHandler()
+        ]
+    )
+
+def cleanup_folders(config: Config):
+    """
+    Clean up temporary folders if they're not needed.
     
-    if not videos:
-        logger.warning(f"No video files found in {input_folder}")
-        
-    return videos
+    Args:
+        config: Configuration object
+    """
+    try:
+        if not config.save_frames and os.path.exists(config.frames_folder):
+            shutil.rmtree(config.frames_folder)
+        if not config.save_frame_text and os.path.exists(config.text_folder):
+            shutil.rmtree(config.text_folder)
+    except Exception as e:
+        logging.warning(f"Failed to clean up folders: {str(e)}")
 
 def dedup_words(texts: List[str]) -> List[str]:
     """
@@ -51,8 +50,9 @@ def dedup_words(texts: List[str]) -> List[str]:
     """
     wordSet = set()
     for text in texts:
-        words = text.split()
-        wordSet.update(words)
+        if text.strip():  # Only process non-empty strings
+            words = text.split()
+            wordSet.update(words)
     return sorted(list(wordSet))
 
 def process_video(video_path: str, config: Config) -> None:
@@ -66,19 +66,29 @@ def process_video(video_path: str, config: Config) -> None:
     Raises:
         Exception: If any step of processing fails
     """
+    logger = logging.getLogger(__name__)
     try:
         logger.info(f"Processing video: {video_path}")
         
         # get frames from video
         frames = utils.get_frames(video_path, config)
+        if not frames:
+            raise ValueError("No frames were extracted from the video")
         
         # extract text from frames
         text = utils.extract_text(frames, config)
+        if not text:
+            logger.warning("No text was extracted from any frames")
+            return
         
         # dedup words and output as text file
         words = dedup_words(text)
+        if not words:
+            logger.warning("No words were extracted after deduplication")
+            return
+            
         video_name = os.path.splitext(os.path.basename(video_path))[0]
-        utils.save_results(words, config.output_folder, video_name, config)
+        utils.save_results(words, video_name)
         
         logger.info(f"Successfully processed video: {video_path}")
         
@@ -90,32 +100,88 @@ def main():
     """
     Main entry point for the video processing application.
     """
+    # Initialize logger with basic configuration
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+    logger = logging.getLogger(__name__)
+    
     try:
-        config = Config()
+        # Add command line argument parsing
+        parser = argparse.ArgumentParser(description='Video text extraction and processing')
+        
+        # Create a mutually exclusive group for video path arguments
+        video_group = parser.add_mutually_exclusive_group(required=True)
+        video_group.add_argument('video_path', nargs='?', help='Path to video file to process')
+        video_group.add_argument('--video', type=str, help='Path to video file to process')
+        
+        parser.add_argument('--frame-gap', 
+                          type=float, 
+                          default=5.0,
+                          help='Gap between frames in seconds (default: 5.0)')
+        parser.add_argument('--save-frames', 
+                          action='store_true',
+                          help='Save frame screenshots (default: False)')
+        parser.add_argument('--save-frame-text',
+                          action='store_true', 
+                          help='Save text for each frame (default: False)')
+        parser.add_argument('--languages',
+                          type=str,
+                          nargs='+',
+                          default=['eng'],
+                          help='Languages to use for OCR (default: eng). Can be combined with +. Example: eng+chi_tra')
+        parser.add_argument('--debug',
+                          action='store_true',
+                          help='Save debug images for each processing step (default: False)')
+        
+        args = parser.parse_args()
+        
+        # Get video path from either argument
+        video_path = args.video_path or args.video
+        
+        # Create config with all parameters at once
+        config = Config(
+            frame_gap=args.frame_gap,
+            save_frames=args.save_frames,
+            save_frame_text=args.save_frame_text,
+            languages=args.languages,
+            debug=args.debug
+        )
+        
+        # Set up logging with file handler after config is created
+        setup_logging(config)
+        
         logger.info("Starting video processing application")
+        logger.info(f"Frame gap: {config.frame_gap}s")
+        logger.info(f"Save frames: {config.save_frames}")
+        logger.info(f"Save frame text: {config.save_frame_text}")
+        logger.info(f"Languages: {', '.join(config.languages)}")
+        logger.info(f"Debug mode: {config.debug}")
         
-        # get videos from input folder
-        videos = get_videos(config.input_folder)
-        
-        if not videos:
-            logger.error("No videos to process. Exiting.")
-            return
+        # Process video file
+        if not os.path.exists(video_path):
+            logger.error(f"Video file not found: {video_path}")
+            sys.exit(1)
+        if not video_path.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+            logger.error(f"Invalid video file format: {video_path}")
+            sys.exit(1)
             
-        # Process each video
-        for video in videos:
-            video_path = os.path.join(config.input_folder, video)
-            try:
-                process_video(video_path, config)
-            except Exception as e:
-                logger.error(f"Failed to process video {video}: {str(e)}")
-                # Continue with next video instead of failing completely
-                continue
-                
+        try:
+            process_video(video_path, config)
+        except Exception as e:
+            logger.error(f"Failed to process video {video_path}: {str(e)}")
+            sys.exit(1)
+        finally:
+            # Clean up temporary folders
+            cleanup_folders(config)
+            
         logger.info("Video processing completed")
         
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
-        raise
+        sys.exit(1)
 
 if __name__ == "__main__":
     main() 

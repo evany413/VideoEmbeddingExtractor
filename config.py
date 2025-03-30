@@ -1,36 +1,57 @@
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List
 
 @dataclass
 class Config:
-    # Directory paths
-    input_folder: str = 'input'
-    output_folder: str = 'output'
+    # OCR settings
+    languages: List[str] = field(default_factory=lambda: ['eng'])
+    tesseract_config: str = ''
+    
+    # Frame extraction settings
+    frame_gap: float = 5.0  # seconds between frames
+    save_frames: bool = False  # whether to save frame screenshots
+    save_frame_text: bool = False  # whether to save text for each frame
+    
+    # Debug settings
+    debug: bool = False  # whether to save debug images
+    debug_folder: str = 'debug'  # folder for debug images
+    
+    # Logging
+    log_file: str = 'video_processing.log'
+    
+    # Folder paths
     frames_folder: str = 'frames'
     text_folder: str = 'text'
     
-    # Video processing settings
-    frame_rate: int = 10  # Extract every Nth frame
-    output_format: str = 'txt'
-    
-    # Logging settings
-    log_level: str = 'INFO'
-    log_file: str = 'video_processing.log'
-    
-    # OCR settings
-    languages: List[str] = field(default_factory=lambda: ['eng'])  # List of languages to use
-    tesseract_config: Optional[str] = None  # Additional Tesseract configuration options
-    
     def __post_init__(self):
         # Create all necessary directories
-        for folder in [self.input_folder, self.output_folder, 
-                      self.frames_folder, self.text_folder]:
+        for folder in [self.frames_folder, self.text_folder]:
             os.makedirs(folder, exist_ok=True)
-            
+        
+        # Create debug folder if debug mode is enabled
+        if self.debug:
+            os.makedirs(self.debug_folder, exist_ok=True)
+        
         # Validate languages
-        valid_languages = {'eng', 'chi_sim', 'chi_tra'}
-        invalid_languages = set(self.languages) - valid_languages
-        if invalid_languages:
-            raise ValueError(f"Invalid language codes: {invalid_languages}. "
-                           f"Valid codes are: {valid_languages}") 
+        self._validate_languages()
+    
+    def _validate_languages(self):
+        """Validate that all specified languages are installed."""
+        import pytesseract
+        try:
+            # Get list of installed languages
+            installed_langs = pytesseract.get_languages()
+            
+            # Check each language
+            for lang in self.languages:
+                # Split combined language string and check each
+                lang_parts = lang.split('+')
+                missing_langs = [part for part in lang_parts if part not in installed_langs]
+                if missing_langs:
+                    raise ValueError(
+                        f"Missing language data files for: {', '.join(missing_langs)}. "
+                        f"Please install the required language data files for Tesseract."
+                    )
+        except Exception as e:
+            raise ValueError(f"Error validating languages: {str(e)}") 
