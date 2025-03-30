@@ -1,0 +1,2 @@
+# VideoEmbeddingExtractor
+Extract video embeddings
