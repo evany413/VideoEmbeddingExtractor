@@ -13,7 +13,7 @@ A Python tool that extracts text from videos using OCR (Optical Character Recogn
   - Simplified Chinese
   - Traditional Chinese
 - Comprehensive error handling and logging
-- Configurable settings through a central configuration file
+- Configurable settings through command line arguments
 - Cross-platform compatibility
 
 ## Prerequisites
@@ -67,62 +67,61 @@ cd VideoEmbeddingExtractor
 pip install -r requirements.txt
 ```
 
-## Configuration
-
-The project uses a central configuration file (`config.py`) where you can modify various settings:
-
-```python
-@dataclass
-class Config:
-    # Directory paths
-    input_folder: str = 'input'
-    output_folder: str = 'output'
-    frames_folder: str = 'frames'
-    text_folder: str = 'text'
-    
-    # Video processing settings
-    frame_rate: int = 10  # Extract every Nth frame
-    output_format: str = 'txt'
-    
-    # Logging settings
-    log_level: str = 'INFO'
-    log_file: str = 'video_processing.log'
-    
-    # OCR settings
-    languages: List[str] = field(default_factory=lambda: ['eng'])  # List of languages to use
-    tesseract_config: Optional[str] = None
-```
-
-### Language Configuration
-
-You can specify multiple languages for OCR processing. The languages are processed in order, and results are combined. Available language codes:
-- `eng`: English
-- `chi_sim`: Simplified Chinese
-- `chi_tra`: Traditional Chinese
-
-Example configuration for multiple languages:
-```python
-config = Config(languages=['eng', 'chi_sim', 'chi_tra'])
-```
-
 ## Usage
 
-1. Place your video files in the `input` folder
-2. Configure the desired languages in `config.py`
-3. Run the script:
+The tool can be used from the command line with various options:
+
 ```bash
-python main.py
+python main.py [video_path] [options]
 ```
 
-4. The processed results will be saved in the `output` folder
-5. Check the `video_processing.log` file for detailed processing information
+### Basic Usage
+```bash
+python main.py video.mp4
+```
 
-### Output Structure
+### Advanced Options
+```bash
+python main.py video.mp4 --frame-gap 3.0 --languages eng chi_sim --save-frames --save-frame-text
+```
 
-- `output/`: Contains the final word lists for each video
-- `frames/`: Contains extracted video frames
-- `text/`: Contains OCR results for each frame
-- `video_processing.log`: Contains detailed processing logs
+### Command Line Arguments
+
+- `video_path`: Path to the video file to process (required)
+- `--video`: Alternative way to specify the video path
+- `--frame-gap`: Time gap between frames in seconds (default: 5.0)
+- `--save-frames`: Save frame screenshots (default: False)
+- `--save-frame-text`: Save text for each frame (default: False)
+- `--languages`: Languages to use for OCR (default: eng). Can be combined with +. Example: eng+chi_tra
+- `--debug`: Show detailed debug information (default: False)
+
+### Output
+
+By default, the tool provides minimal console output:
+```
+Starting video processing...
+Processing video: example.mp4
+✓ Processing completed successfully
+```
+
+With `--debug` enabled, you'll see detailed information:
+```
+Starting video processing application
+Frame gap: 5.0s
+Save frames: False
+Save frame text: False
+Languages: eng
+Debug mode: True
+...
+```
+
+### Output Files
+
+- `{video_name}_words.txt`: Contains the final deduplicated word list
+- `video_processing.log`: Contains detailed processing logs (created in all cases)
+- `frames/`: Contains extracted video frames (if --save-frames is enabled)
+- `text/`: Contains OCR results for each frame (if --save-frame-text is enabled)
+- `debug/`: Contains debug images for each processing step (if --debug is enabled)
 
 ## Error Handling
 
@@ -133,6 +132,11 @@ The tool includes comprehensive error handling:
 - Creates necessary directories automatically
 - Validates input files and paths
 - Handles language-specific OCR errors gracefully
+
+Error messages are displayed in a user-friendly format:
+```
+Error: Video file not found: example.mp4
+```
 
 ## Contributing
 
