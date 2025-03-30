@@ -39,14 +39,14 @@ def calculate_frame_info(video_path: str, frame_gap: float) -> Tuple[float, int,
         # Calculate required number of digits for frame filenames
         num_digits = len(str(num_frames))
         
-        logger.info(f"Video duration: {duration:.2f}s")
-        logger.info(f"Number of frames to extract: {num_frames}")
-        logger.info(f"Using {num_digits} digits for frame filenames")
+        logger.debug(f"Video duration: {duration:.2f}s")
+        logger.debug(f"Number of frames to extract: {num_frames}")
+        logger.debug(f"Using {num_digits} digits for frame filenames")
         
         return duration, num_frames, num_digits
         
     except Exception as e:
-        logger.error(f"Error calculating frame info: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         raise
 
 def get_frames(video_path: str, config: Config = Config()) -> List[str]:
@@ -65,7 +65,7 @@ def get_frames(video_path: str, config: Config = Config()) -> List[str]:
         ffmpeg.Error: If frame extraction fails
     """
     try:
-        logger.info(f"Extracting frames from video: {video_path}")
+        logger.debug(f"Extracting frames from video: {video_path}")
         
         # Calculate frame information
         duration, num_frames, num_digits = calculate_frame_info(video_path, config.frame_gap)
@@ -81,7 +81,7 @@ def get_frames(video_path: str, config: Config = Config()) -> List[str]:
             frame_rate = 1.0 / config.frame_gap
             video.output(output_pattern, start_number=0, r=frame_rate).run(capture_stdout=True, capture_stderr=True)
         except ffmpeg.Error as e:
-            logger.error(f"FFmpeg error: {e.stderr.decode() if e.stderr else str(e)}")
+            logger.error(f"Error: {e.stderr.decode() if e.stderr else str(e)}")
             raise
 
         # get frames from frames folder
@@ -89,11 +89,11 @@ def get_frames(video_path: str, config: Config = Config()) -> List[str]:
                  for frame in os.listdir(config.frames_folder) 
                  if frame.endswith('.jpg')]
         
-        logger.info(f"Successfully extracted {len(frames)} frames")
+        logger.debug(f"Successfully extracted {len(frames)} frames")
         return frames
         
     except Exception as e:
-        logger.error(f"Error extracting frames: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         raise
 
 # extract text from frames
@@ -119,7 +119,7 @@ def extract_text(frames: List[str], config: Config = Config()) -> List[str]:
             if not os.path.exists(frame):
                 raise FileNotFoundError(f"Frame file not found: {frame}")
                 
-            logger.info(f"Processing frame: {frame}")
+            logger.debug(f"Processing frame: {frame}")
             
             # Preprocess the image
             processed_image = preprocess_image(frame, config)
@@ -137,7 +137,7 @@ def extract_text(frames: List[str], config: Config = Config()) -> List[str]:
                         frame_text.append(lang_text)
                         logger.debug(f"Extracted text using {lang} for frame {frame}")
                 except Exception as e:
-                    logger.warning(f"Failed to extract text using {lang} for frame {frame}: {str(e)}")
+                    logger.warning(f"Warning: Failed to extract text using {lang}")
                     continue
             
             if frame_text:
@@ -153,10 +153,10 @@ def extract_text(frames: List[str], config: Config = Config()) -> List[str]:
                         f.write(combined_text)
                     logger.debug(f"Saved text to: {output_path}")
             else:
-                logger.warning(f"No text extracted from frame {frame} using any language")
+                logger.warning("Warning: No text extracted from frame")
             
         except Exception as e:
-            logger.error(f"Error processing frame {frame}: {str(e)}")
+            logger.error(f"Error: {str(e)}")
             # Continue with next frame instead of failing completely
             continue
             
@@ -180,10 +180,10 @@ def save_results(results: List[str], video_name: str) -> None:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(results))
             
-        logger.info(f"Successfully saved results to: {output_path}")
+        logger.debug(f"Successfully saved results to: {output_path}")
         
     except Exception as e:
-        logger.error(f"Error saving results: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         raise
 
 def preprocess_image(image_path: str, config: Config = Config()) -> np.ndarray:
@@ -255,6 +255,6 @@ def preprocess_image(image_path: str, config: Config = Config()) -> np.ndarray:
         return image_rgb
         
     except Exception as e:
-        logger.error(f"Error preprocessing image {image_path}: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         raise ValueError(f"Failed to preprocess image: {str(e)}")
 

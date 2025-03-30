@@ -14,14 +14,27 @@ def setup_logging(config: Config):
     Args:
         config: Configuration object containing logging settings
     """
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(config.log_file),
-            logging.StreamHandler()
-        ]
-    )
+    # Set log level based on debug mode
+    log_level = logging.DEBUG if config.debug else logging.INFO
+    
+    # Create formatters
+    debug_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    user_formatter = logging.Formatter('%(message)s')
+    
+    # Create handlers
+    file_handler = logging.FileHandler(config.log_file)
+    file_handler.setFormatter(debug_formatter)
+    file_handler.setLevel(logging.DEBUG)  # Always log everything to file
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(user_formatter)
+    console_handler.setLevel(log_level)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
 
 def cleanup_folders(config: Config):
     """
@@ -90,24 +103,16 @@ def process_video(video_path: str, config: Config) -> None:
         video_name = os.path.splitext(os.path.basename(video_path))[0]
         utils.save_results(words, video_name)
         
-        logger.info(f"Successfully processed video: {video_path}")
+        logger.info("✓ Processing completed successfully")
         
     except Exception as e:
-        logger.error(f"Error processing video {video_path}: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         raise
 
 def main():
     """
     Main entry point for the video processing application.
     """
-    # Initialize logger with basic configuration
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler()]
-    )
-    logger = logging.getLogger(__name__)
-    
     try:
         # Add command line argument parsing
         parser = argparse.ArgumentParser(description='Video text extraction and processing')
@@ -134,7 +139,7 @@ def main():
                           help='Languages to use for OCR (default: eng). Can be combined with +. Example: eng+chi_tra')
         parser.add_argument('--debug',
                           action='store_true',
-                          help='Save debug images for each processing step (default: False)')
+                          help='Show detailed debug information (default: False)')
         
         args = parser.parse_args()
         
@@ -152,35 +157,40 @@ def main():
         
         # Set up logging with file handler after config is created
         setup_logging(config)
+        logger = logging.getLogger(__name__)
         
-        logger.info("Starting video processing application")
-        logger.info(f"Frame gap: {config.frame_gap}s")
-        logger.info(f"Save frames: {config.save_frames}")
-        logger.info(f"Save frame text: {config.save_frame_text}")
-        logger.info(f"Languages: {', '.join(config.languages)}")
-        logger.info(f"Debug mode: {config.debug}")
+        if config.debug:
+            logger.info("Starting video processing application")
+            logger.info(f"Frame gap: {config.frame_gap}s")
+            logger.info(f"Save frames: {config.save_frames}")
+            logger.info(f"Save frame text: {config.save_frame_text}")
+            logger.info(f"Languages: {', '.join(config.languages)}")
+            logger.info(f"Debug mode: {config.debug}")
+        else:
+            logger.info("Starting video processing...")
         
         # Process video file
         if not os.path.exists(video_path):
-            logger.error(f"Video file not found: {video_path}")
+            logger.error(f"Error: Video file not found: {video_path}")
             sys.exit(1)
         if not video_path.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
-            logger.error(f"Invalid video file format: {video_path}")
+            logger.error(f"Error: Invalid video file format: {video_path}")
             sys.exit(1)
             
         try:
             process_video(video_path, config)
         except Exception as e:
-            logger.error(f"Failed to process video {video_path}: {str(e)}")
+            logger.error(f"Error: {str(e)}")
             sys.exit(1)
         finally:
             # Clean up temporary folders
             cleanup_folders(config)
             
-        logger.info("Video processing completed")
+        if config.debug:
+            logger.info("Video processing completed")
         
     except Exception as e:
-        logger.error(f"Application error: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":

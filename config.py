@@ -6,7 +6,7 @@ from typing import List
 class Config:
     # OCR settings
     languages: List[str] = field(default_factory=lambda: ['eng'])
-    tesseract_config: str = ''
+    tesseract_config: str = '--psm 7'
     
     # Frame extraction settings
     frame_gap: float = 5.0  # seconds between frames
